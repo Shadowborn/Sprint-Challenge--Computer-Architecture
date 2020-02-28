@@ -1,7 +1,7 @@
 import sys
 
 class myCPU:
-
+    print(f"Helloooo start of myCPU")
     def __init__(self):
         # Create registers 0 - 7
         self.register = [0] * 8
@@ -34,6 +34,7 @@ class myCPU:
         self.flag = 0b0000000
 
     def load(self, file):
+        print(f"Loading file...")
         address = 0
 
         program = []
@@ -61,41 +62,22 @@ class myCPU:
             self.ram[address] = instructions
             address += 1
 
-    def jmp(self, address, *args):
-        self.pc = self.register[address]
-
-    def jeq(self, address, *args):
-        mask = 0b00000001
-        if mask & self.im == 1:
-            self.pc = self.register[address]
-        else:
-            self.pc += 2
-
-    def jne(self, address, *args):
-        mask = 0b00000001
-        if mask & self.im == 0:
-            self.pc = self.register[address]
-        else:
-            self.pc += 2
-
     def alu(self, op, reg_a, reg_b):
 
-        # mask == 0b00000001
+        if op == self.op_codes['JMP']:
+            self.pc = self.register
 
-        # if op == self.op_codes['JMP']:
-        #     self.pc = self.register[address]
+        if op == self.op_codes['JEQ']:
+            if self.im == 1:
+                self.pc = self.register
+            else:
+                self.pc += 2
 
-        # if op == self.op_codes['JEQ']:
-        #     if mask & self.im == 1:
-        #         self.pc = self.register[address]
-        #     else:
-        #         self.pc += 2
-
-        # if op == self.op_codes['JNE']:
-        #     if mask & self.im == 0:
-        #         self.pc = self.register[address]
-        #     else:
-        #         self.pc += 2
+        if op == self.op_codes['JNE']:
+            if self.im == 0:
+                self.pc = self.register
+            else:
+                self.pc += 2
 
         if op == self.op_codes['ADD']:
             self.register[reg_a] += self.register[reg_b]
@@ -118,4 +100,105 @@ class myCPU:
 
         else:
             raise Exception("Unsupported ALU operation")
+
+    def trace(self):
+
+        print(f"TRACE: %02X | %02X %02X %02X |" % (
+            self.pc,
+            # self.fl,
+            # self.ie,
+            self.ram_read(self.pc),
+            self.ram_read(self.pc + 1),
+            self.ram_read(self.pc + 2)
+        ), end='')
+
+        for i in range(8):
+            print(" %02X" % self.register[i], end='')
+
+        print()
+    def run(self):
+        running = True
+
+        while running:
+
+            # Instruction register, contains a copy of the currently executing instruction
+            IR = self.ram[self.pc]
+
+            if IR == self.op_codes['LDI']:  # LDI
+                num = self.ram[self.pc + 1]
+                register = self.ram[self.pc + 2]
+
+                self.register[num] = register
+                self.pc += 3
+
+            elif IR == self.op_codes['PRN']:  # PRN
+                register = self.ram[self.pc + 1]
+                print(self.register[register])
+                self.pc += 2
+
+            elif IR == self.op_codes['HLT']:  # HLT
+                running = False
+                self.pc += 1
+
+            elif IR == self.op_codes['PUSH']:
+                register = self.ram[self.pc + 1]
+                val = self.register[register]
+                #  Got to decrement the Stack pointer.
+                self.register[self.SP] -= 1
+                # Copy the value in the given register to the address pointed to by Stack pointer
+                self.ram[self.register[self.SP]] = val
+                self.pc += 2
+
+            elif IR == self.op_codes['POP']:
+                register = self.ram[self.pc + 1]
+                val = self.ram[self.register[self.SP]]
+                # Copy the value from the address pointed to by Stack pointer to the given register
+                self.register[register] = val
+                # Increment SP
+                self.register[self.SP] += 1
+                self.pc += 2
+
+            elif IR == self.op_codes['CALL']:
+                # we want to push the return address on the stack
+                self.register[self.SP] -= 1  # the stack push
+                self.ram[self.register[self.SP]] = self.pc + 2
+
+                # The program counter is set to the address stored in the given register
+                register = self.ram[self.pc + 1]
+                # We then jump to that location in the RAM and execute the first instruction
+                self.pc = self.register[register]
+
+            elif IR == self.op_codes['RET']:
+                # return the subroutine
+                self.pc = self.ram[self.register[self.SP]]
+                # pop the value from the top of the stack
+                self.register[self.SP] += 1
+
+            elif IR == self.op_codes['ADD']:
+                reg_a = self.ram[self.pc + 1]
+                reg_b = self.ram[self.pc + 2]
+                self.alu(IR, reg_a, reg_b)
+
+            elif IR == self.op_codes['MUL']:
+                reg_a = self.ram[self.pc + 1]
+                reg_b = self.ram[self.pc + 2]
+                self.alu(IR, reg_a, reg_b)
+
+            elif IR == self.op_codes['CMP']:
+                reg_a = self.ram[self.pc + 1]
+                reg_b = self.ram[self.pc + 2]
+                self.alu(IR, reg_a, reg_b)
+
+            else:
+                print(f"Unknown IR: {IR}")
+                sys.exit(1)
+
+    def ram_read(self, MAR):
+        # Read from RAM
+        # Accepts the address to read and return the value stored there
+        return self.ram[MAR]
+
+    # accept a value to write, and the addres to write it to
+    def ram_write(self, MAR, MDR):
+        self.ram[MAR] = MDR
         
